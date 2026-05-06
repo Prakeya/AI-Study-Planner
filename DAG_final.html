@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Directed Acyclic Graphs</title>
+
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<style>
+
+body{
+    font-family:'Segoe UI',sans-serif;
+    background:linear-gradient(135deg,#667eea,#764ba2);
+    text-align:center;
+    color:white;
+}
+
+.container{
+    background:white;
+    color:black;
+    padding:20px;
+    margin:20px auto;
+    width:92%;
+    border-radius:12px;
+}
+
+textarea{
+    width:90%;
+    height:150px;
+    padding:10px;
+    border-radius:8px;
+}
+
+button{
+    background:#ff7a18;
+    border:none;
+    padding:10px 20px;
+    color:white;
+    border-radius:8px;
+    margin-top:10px;
+    cursor:pointer;
+}
+
+#network{
+    height:460px;
+    margin-top:20px;
+    border-radius:10px;
+    background:#f5f7fa;
+}
+
+#order{
+    margin-top:10px;
+    font-weight:bold;
+}
+
+.legend span{
+    padding:5px 10px;
+    border-radius:6px;
+    margin-right:10px;
+    color:white;
+}
+
+.locked{background:#aaa;}
+.unlocked{background:#4CAF50;}
+.done{background:#2196F3;}
+
+.error{
+    color:red;
+    font-weight:bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Directed Acyclic Graphs</h2>
+
+<div class="container">
+
+<p><b>Format:</b> Subject : prereq1, prereq2</p>
+
+<textarea id="subjects">
+Machine Learning : Probability
+Deep Learning : Machine Learning
+Probability :
+Operating Systems : Data Structures
+Data Structures :
+</textarea>
+
+<br>
+<button onclick="generateGraph()">Generate</button>
+<button onclick="resetProgress()">Reset Progress</button>
+
+<div id="order"></div>
+
+<div class="legend">
+<span class="locked">Locked</span>
+<span class="unlocked">Unlocked</span>
+<span class="done">Completed</span>
+</div>
+
+<div id="network"></div>
+
+</div>
+
+<script>
+
+let completed = new Set(JSON.parse(localStorage.getItem("progress") || "[]"));
+
+let adjacency = {};
+let reverseAdj = {};
+let nodes = {};
+let edges = [];
+
+//////////////////////////////////////////////////
+// CREATE NETWORK ONCE
+//////////////////////////////////////////////////
+
+let container = document.getElementById("network");
+
+let network = new vis.Network(container, {
+    nodes: new vis.DataSet([]),
+    edges: new vis.DataSet([])
+},{
+    layout:{hierarchical:{direction:"LR"}},
+    edges:{arrows:"to"},
+    physics:false
+});
+
+//////////////////////////////////////////////////
+// MAIN FUNCTION
+//////////////////////////////////////////////////
+
+function generateGraph(){
+
+adjacency = {};
+reverseAdj = {};
+nodes = {};
+edges = [];
+
+let input = document.getElementById("subjects").value;
+
+if(!input.trim()){
+    showError("Input cannot be empty");
+    return;
+}
+
+let lines = input.split("\n").map(l=>l.trim()).filter(l=>l);
+
+let id = 1;
+
+function getNode(name){
+    name = name.toLowerCase();
+    if(!nodes[name]) nodes[name] = id++;
+    return nodes[name];
+}
+
+//////////////////////////////////////////////////
+// BUILD GRAPH
+//////////////////////////////////////////////////
+
+for(let line of lines){
+
+    if(!line.includes(":")){
+        showError("Invalid format: " + line);
+        return;
+    }
+
+    let [subject, prereqStr] = line.split(":");
+
+    subject = subject.trim().toLowerCase();
+
+    if(!subject){
+        showError("Empty subject");
+        return;
+    }
+
+    getNode(subject);
+
+    adjacency[subject] = adjacency[subject] || [];
+    reverseAdj[subject] = reverseAdj[subject] || [];
+
+    if(prereqStr){
+        let prereqs = prereqStr.split(",");
+
+        for(let p of prereqs){
+            let pre = p.trim().toLowerCase();
+            if(pre){
+                getNode(pre);
+
+                adjacency[pre] = adjacency[pre] || [];
+                adjacency[pre].push(subject);
+
+                reverseAdj[subject].push(pre);
+
+                edges.push({
+                    from:nodes[pre],
+                    to:nodes[subject]
+                });
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////
+// CYCLE DETECTION
+//////////////////////////////////////////////////
+
+let visited = {};
+let stack = {};
+
+function dfs(node){
+    visited[node] = true;
+    stack[node] = true;
+
+    for(let nei of (adjacency[node]||[])){
+        if(!visited[nei] && dfs(nei)) return true;
+        if(stack[nei]) return true;
+    }
+
+    stack[node] = false;
+    return false;
+}
+
+for(let n in adjacency){
+    if(!visited[n]){
+        if(dfs(n)){
+            showError("Cycle detected!");
+            return;
+        }
+    }
+}
+
+//////////////////////////////////////////////////
+// TOPO SORT
+//////////////////////////////////////////////////
+
+let indegree = {};
+for(let n in adjacency) indegree[n] = 0;
+
+for(let n in adjacency){
+    adjacency[n].forEach(v => indegree[v]++);
+}
+
+let queue = [];
+for(let n in indegree){
+    if(indegree[n] === 0) queue.push(n);
+}
+
+let topo = [];
+
+while(queue.length){
+    let cur = queue.shift();
+    topo.push(cur);
+
+    for(let nei of (adjacency[cur]||[])){
+        indegree[nei]--;
+        if(indegree[nei] === 0) queue.push(nei);
+    }
+}
+
+document.getElementById("order").innerHTML =
+"Study Order: " + topo.join(" -> ");
+
+//////////////////////////////////////////////////
+// NODE COLORS
+//////////////////////////////////////////////////
+
+function isUnlocked(node){
+    return (reverseAdj[node]||[]).every(p => completed.has(p));
+}
+
+let nodeArray = [];
+
+for(let n in nodes){
+
+    let color = "#aaa";
+
+    if(isUnlocked(n)) color = "#4CAF50";
+
+    if(completed.has(n)) color = "#2196F3";
+
+    nodeArray.push({
+        id:nodes[n],
+        label:n,
+        shape:"box",
+        color:{background:color},
+        font:{color:"white"}
+    });
+}
+
+//////////////////////////////////////////////////
+// UPDATE NETWORK
+//////////////////////////////////////////////////
+
+network.setData({
+    nodes:new vis.DataSet(nodeArray),
+    edges:new vis.DataSet(edges)
+});
+
+clearError();
+
+}
+
+//////////////////////////////////////////////////
+// CLICK = TOGGLE COMPLETE
+//////////////////////////////////////////////////
+
+network.on("click", function(params){
+
+    if(params.nodes.length === 0) return;
+
+    let idClicked = params.nodes[0];
+
+    let name = Object.keys(nodes).find(k => nodes[k] === idClicked);
+
+    if(!name) return;
+
+    // toggle OFF if already completed
+    if(completed.has(name)){
+        completed.delete(name);
+    }
+    else{
+        // only allow if unlocked
+        if(!(reverseAdj[name]||[]).every(p => completed.has(p))){
+            alert("Finish prerequisites first");
+            return;
+        }
+        completed.add(name);
+    }
+
+    localStorage.setItem("progress", JSON.stringify([...completed]));
+
+    generateGraph();
+});
+
+//////////////////////////////////////////////////
+// RESET
+//////////////////////////////////////////////////
+
+function resetProgress(){
+    completed = new Set();
+    localStorage.removeItem("progress");
+    generateGraph();
+}
+
+//////////////////////////////////////////////////
+// ERROR
+//////////////////////////////////////////////////
+
+function showError(msg){
+    document.getElementById("order").innerHTML =
+    "<span class='error'>" + msg + "</span>";
+}
+
+function clearError(){}
+
+</script>
+
+</body>
+</html>

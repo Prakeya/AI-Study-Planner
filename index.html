@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Study Planner</title>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: slateblue;
+            color: white;
+            text-align: center;
+            margin: 0;
+        }
+
+        h1 {
+            margin-top: 60px;
+        }
+
+        .container {
+            margin-top: 40px;
+        }
+
+        .card {
+            background: white;
+            color: black;
+            width: 250px;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+            background: #eee;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Study Planner</h1>
+
+<div class="container">
+
+    <div class="card" onclick="goTo('DAG_final.html')">
+        <h3>Subject Dependencies Using DAGs</h3>
+        <p>Visualize subject dependencies</p>
+    </div>
+
+    <div class="card" onclick="goTo('focusscore_final.html')">
+        <h3>Focus Monitor</h3>
+        <p>Track your concentration</p>
+    </div>
+
+    <div class="card" onclick="goTo('priorityqueue.html')">
+        <h3>Task Flow Planner</h3>
+        <p>Prioritize your tasks</p>
+    </div>
+
+</div>
+
+<script>
+function goTo(page){
+    window.location.href = page; // same tab redirect
+}
+</script>
+
+</body>
+</html>
